@@ -15,7 +15,7 @@ operator_dict = {"+": lambda x, y: x + y,
                  "*": lambda x, y: x * y,
                  "/": lambda x, y: x // y,
                  }
-def test_prediction(model, A, B, operator, show=False):
+def test_prediction_rev(model, A, B, operator, show=False):
     """
     real_ans, model_anss, moder_ansstrs = test_prediction(model, 120, 51, "*", show=True)
     """
@@ -31,7 +31,7 @@ def test_prediction(model, A, B, operator, show=False):
         answer = answer.tolist()
         answer_str = detokenize_str(answer[1:answer.index(EOS_id)])
         try:
-            answer_int = int(answer_str.split("=")[1])
+            answer_int = int(answer_str.split(";")[1])
             answer_ints.append(answer_int)
             if show:
                 print(f"{answer_str} ({answer_int})")
@@ -46,7 +46,7 @@ def evaluate_at_exercise_set(model, exercises_set, print_ans=False):
     mean_acc = 0
     summary_str = ""
     for A, B, operator in exercises_set:
-        real_ans, model_anss, moder_ansstrs = test_prediction(model, A, B, operator, show=False)
+        real_ans, model_anss, moder_ansstrs = test_prediction_rev(model, A, B, operator, show=False)
         accuracies = sum([ans == real_ans for ans in model_anss]) / len(model_anss)
         mean_acc += accuracies
         sumstr = f"{A} {operator} {B} = {real_ans}, model ans {model_anss} accuracy: {accuracies:.2f}"
@@ -75,20 +75,21 @@ saveroot = r"D:\DL_Projects\Language\ArithmeticGPT"
 saveroot = "/home/binxu/DL_Projects/Language/ArithmeticGPT"
 os.makedirs(saveroot, exist_ok=True)
 
+# config = GPT2Config(n_embd=128, n_layer=12, n_head=8, n_positions=128, n_ctx=128,
+#                     vocab_size=21, bos_token_id=BOS_id, eos_token_id=EOS_id,)
 config = GPT2Config(n_embd=128, n_layer=24, n_head=8, n_positions=128, n_ctx=128,
                     vocab_size=21, bos_token_id=BOS_id, eos_token_id=EOS_id,)
 model = GPT2LMHeadModel(config)
 model.cuda()
 optimizer = AdamW(model.parameters(), lr=10e-4)
-savedir = join(saveroot, "run_med_PMM1000")
-os.makedirs(savedir, exist_ok=True)
-os.makedirs(join(savedir, "ckpt"), exist_ok=True)
 #%%
-dataset_PM = ArithmeticDataset(["+", "-", "*"], (0, 1000), (0, 1000))
-writer = SummaryWriter(savedir)
+dataset_PMM_rev = ArithmeticDataset(["+r", "-r", "*r"], (0, 1000), (0, 1000))
+writer = SummaryWriter(join(saveroot, "run_med_PMM1000_rev_scratch"))
+os.makedirs(join(saveroot,  "run_med_PMM1000_rev_scratch", "ckpt"), exist_ok=True)
 for epoch in range(0, 500):
+    model.train()
     for i in range(100):
-        task_fulls, labels = batch_sampler(dataset_PM, 1024)
+        task_fulls, labels = batch_sampler(dataset_PMM_rev, 1024)
         out = model(task_fulls.cuda(), labels=labels.cuda())
         loss = out.loss
         loss.backward()
@@ -99,7 +100,7 @@ for epoch in range(0, 500):
         writer.add_scalar("lr", optimizer.param_groups[0]["lr"], epoch * 100 + i)
         writer.add_scalar("epoch", epoch, epoch * 100 + i)
 
-
+    model.eval()
     mean_acc, sumstr = evaluate_at_exercise_set(model, manual_set, print_ans=True)
     random_set = [(random.randint(1, 1000), random.randint(1, 1000), random.choice(["+", "-", "*"])) for _ in range(25)]
     mean_acc_rand, sumstr_rand = evaluate_at_exercise_set(model, random_set, print_ans=True)
@@ -115,9 +116,10 @@ for epoch in range(0, 500):
     writer.add_text("randmultset_summary", sumstr_randmult, (epoch + 1) * 100)
     writer.add_scalar("mean_acc_randmult10set", mean_acc_randmult10, (epoch + 1) * 100)
     writer.add_text("randmult10set_summary", sumstr_randmult10, (epoch + 1) * 100)
-    torch.save(model.state_dict(), join(savedir, "ckpt", f"model_PMM1000_epoch{epoch}.pt"))
+    torch.save(model.state_dict(), join(saveroot,  "run_med_PMM1000_rev_scratch", "ckpt", f"model_PMM1000_epoch{epoch}.pt"))
 
-model.save_pretrained(join(saveroot, "gpt2_med_arithmetic_PMM"))
+
+model.save_pretrained(join(saveroot, "gpt2_med_arithmetic_PMM_rev_scratch"))
 #%%
 question = "120 - 51 = "
 input_ids = [BOS_id] + tokenize_str(question)
@@ -138,15 +140,15 @@ SPC_id = token_encode[" "]
 #%%
 
 #%%
-real_ans, model_anss, moder_ansstrs = test_prediction(model, 120, 51, "*", show=True)
+real_ans, model_anss, moder_ansstrs = test_prediction_rev(model, 120, 51, "*", show=True)
 #%%
 mean_acc = 0
 for A, B, operator in manual_set:
-    real_ans, model_anss, moder_ansstrs = test_prediction(model, A, B, operator, show=False)
+    real_ans, model_anss, moder_ansstrs = test_prediction_rev(model, A, B, operator, show=True)
     accuracies = sum([ans == real_ans for ans in model_anss]) / len(model_anss)
     print(f"{A} {operator} {B} real ans: {real_ans}, model ans {model_anss} accuracy: {accuracies}")
     mean_acc += accuracies
-mean_acc /= len(exercises_set)
+mean_acc /= len(manual_set)
 print(f"mean accuracy: {mean_acc}")
 #%%
 mean_acc, sumstr = evaluate_at_exercise_set(model, manual_set, print_ans=False)

@@ -30,7 +30,11 @@ Further,
 
 If it does not learn well, will curriculum learning help?
 * i.e. if the model learns single digit add, and multiplication first, will it learn faster on more digits multiplication?
-* will it benefits from learning **the order of digits, by sorting them**? 
+* will it benefits from learning **the order of digits, by sorting them**?
+
+* Will it help if we allow it to output the answer in the reverse digit order => it will have access to lower digit when outputing higher digits?
+* Further will it help to have intermediate steps as scratch pad?
+
 
 ## Results
 ### Sequence modelling training won't generalize
@@ -78,6 +82,59 @@ Note that
   * the first and last digit is correct. 
   * while the other digits suffers from lots of carry over errors. 
 
+At epoch 134, the model has not learned multiplication of even single digit. 
+```
+1 * 3 = 3, model ans [3, 4, 2, 33, 4] accuracy: 0.20
+2 * 3 = 6, model ans [420, 1, 4, 7417, 7] accuracy: 0.00
+10 * 20 = 200, model ans [200, 200, 200, 200, 200] accuracy: 1.00
+10 + 20 = 30, model ans [30, 30, 30, 30, 30] accuracy: 1.00
+10 - 20 = -10, model ans [90, -10, -10, 10, 70] accuracy: 0.40
+5 * 155 = 775, model ans [555, 675, 785, 565, 775] accuracy: 0.20
+3 * 30 = 90, model ans [33, 35, 34, 36, 90] accuracy: 0.20
+5 * 12 = 60, model ans [76, 58, 58, 70, 70] accuracy: 0.00
+9 * 11 = 99, model ans [179, 171, 89, 119, 199] accuracy: 0.00
+19 + 13 = 32, model ans [32, 42, 42, 42, 32] accuracy: 0.40
+11 + 111 = 122, model ans [122, 122, 122, 122, 122] accuracy: 1.00
+11 * 112 = 1232, model ans [1232, 1232, 1232, 1232, 1232] accuracy: 1.00
+```
+
+At epoch 160
+```
+1 * 3 = 3, model ans [3, 3, 8, 5, 9] accuracy: 0.40
+2 * 3 = 6, model ans [4, 6, 6, 5, 6] accuracy: 0.60
+10 * 20 = 200, model ans [200, 200, 200, 200, 200] accuracy: 1.00
+10 + 20 = 30, model ans [20, 30, 30, 30, 30] accuracy: 0.80
+10 - 20 = -10, model ans [70, 0, -9, 0, 0] accuracy: 0.00
+5 * 155 = 775, model ans [875, 675, 775, 875, 875] accuracy: 0.20
+3 * 30 = 90, model ans [90, 90, 86, 90, 144] accuracy: 0.60
+5 * 12 = 60, model ans [56, 51, 52, 65, 51] accuracy: 0.00
+9 * 11 = 99, model ans [199, 99, 99, 99, 99] accuracy: 0.80
+19 + 13 = 32, model ans [32, 32, 30, 32, 32] accuracy: 0.80
+11 + 111 = 122, model ans [122, 122, 182, 122, 122] accuracy: 0.80
+11 * 112 = 1232, model ans [1232, 1232, 1232, 1232, 1232] accuracy: 1.00
+916 + 316 = 1232, model ans [1232, 1232, 1232, 1232, 1232] accuracy: 1.00
+782 + 520 = 1302, model ans [1302, 1302, 1302, 1302, 1302] accuracy: 1.00
+437 * 335 = 146395, model ans [145695, 147595, 144795, 144795, 148395] accuracy: 0.00
+683 * 66 = 45078, model ans [45078, 45278, 45178, 45158, 45078] accuracy: 0.40
+219 - 228 = -9, model ans [-9, -9, -9, -9, -99] accuracy: 0.80
+243 + 350 = 593, model ans [593, 593, 593, 593, 593] accuracy: 1.00
+500 - 56 = 444, model ans [444, 444, 444, 444, 444] accuracy: 1.00
+318 + 933 = 1251, model ans [1251, 1251, 1251, 1251, 1251] accuracy: 1.00
+327 + 606 = 933, model ans [933, 933, 933, 933, 933] accuracy: 1.00
+859 * 282 = 242238, model ans [243238, 240238, 242838, 244038, 242038] accuracy: 0.00
+720 + 88 = 808, model ans [808, 808, 808, 808, 808] accuracy: 1.00
+151 + 7 = 158, model ans [158, 158, 158, 158, 158] accuracy: 1.00
+371 * 198 = 73458, model ans [72858, 73458, 71658, 71458, 73658] accuracy: 0.20
+283 * 416 = 117728, model ans [119428, 119428, 119528, 117228, 118828] accuracy: 0.00
+582 - 375 = 207, model ans [207, 207, 207, 207, 207] accuracy: 1.00
+986 + 642 = 1628, model ans [1628, 1628, 1628, 1628, 1628] accuracy: 1.00
+105 + 663 = 768, model ans [768, 768, 768, 768, 768] accuracy: 1.00
+726 * 367 = 266442, model ans [261042, 264142, 260242, 268442, 262042] accuracy: 0.00
+819 - 110 = 709, model ans [709, 709, 709, 709, 709] accuracy: 1.00
+721 * 978 = 705138, model ans [706638, 703438, 704738, 704838, 704338] accuracy: 0.00
+329 + 101 = 430, model ans [430, 430, 430, 430, 430] accuracy: 1.00
+738 + 316 = 1054, model ans [1054, 1054, 1054, 954, 1054] accuracy: 0.80
+```
 ### Scratch pad reasoning (Intermediate step supervision)
 
 

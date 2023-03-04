@@ -1,7 +1,7 @@
 
 from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
 
-token_list = "0123456789=+-*/, "
+token_list = "0123456789=+-*/,; "
 token_encode = {ch: i for i, ch in enumerate(token_list)}
 token_decode = {i: ch for i, ch in enumerate(token_list)}
 BOS_id = len(token_list)
@@ -54,11 +54,43 @@ def intdiv_task_generator(A, B):
     return task, task_full
 
 
+def plus_task_rev_generator(A, B):
+    """Generate a task for addition.
+    """
+    ans = A+B
+    ansstr = str(ans)
+    task = f"{A} + {B} = "
+    task_full = f"{A} + {B} = {ansstr[::-1]}; {ans}"
+    return task, task_full
+
+
+def minus_task_rev_generator(A, B):
+    """Generate a task for subtraction.
+    """
+    ans = A-B
+    ansstr = str(ans)
+    task = f"{A} - {B} = "
+    task_full = f"{A} - {B} = {ansstr[::-1]}; {ans}"
+    return task, task_full
+
+
+def mul_task_rev_generator(A, B):
+    """Generate a task for multiplication.
+    """
+    ans = A*B
+    ansstr = str(ans)
+    task = f"{A} * {B} = "
+    task_full = f"{A} * {B} = {ansstr[::-1]}; {ans}"
+    return task, task_full
+
 task_dict = {
     "+": plus_task_generator,
     "-": minus_task_generator,
     "*": mul_task_generator,
     "/": intdiv_task_generator,
+    "+r": plus_task_rev_generator,
+    "-r": minus_task_rev_generator,
+    "*r": mul_task_rev_generator,
 }
 
 
