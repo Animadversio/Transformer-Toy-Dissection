@@ -1,4 +1,6 @@
 
+from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
+
 token_list = "0123456789=+-*/, "
 token_encode = {ch: i for i, ch in enumerate(token_list)}
 token_decode = {i: ch for i, ch in enumerate(token_list)}
@@ -102,8 +104,6 @@ class ArithmeticDataset(Dataset):
         return task_full, task_full_label
 
 
-#%%
-from torch.nn.utils.rnn import pad_sequence, pack_padded_sequence, pad_packed_sequence
 def batch_sampler(data_source, batch_size, ):
     batch = []
     label_batch = []
