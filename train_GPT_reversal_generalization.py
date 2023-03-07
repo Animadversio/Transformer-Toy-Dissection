@@ -4,6 +4,7 @@ import sys
 import random
 import torch
 from torch.optim import AdamW
+from tqdm import tqdm
 from torch.nn import CrossEntropyLoss
 from torch.utils.tensorboard import SummaryWriter
 from arithmetic_dataset import EOS_id, BOS_id, PAD_ID, tokenize_str, detokenize_str
@@ -15,6 +16,8 @@ operator_dict = {"+": lambda x, y: x + y,
                  "*": lambda x, y: x * y,
                  "/": lambda x, y: x // y,
                  }
+
+
 def test_prediction_rev(model, A, B, operator, show=False):
     """
     real_ans, model_anss, moder_ansstrs = test_prediction(model, 120, 51, "*", show=True)
@@ -45,7 +48,7 @@ def test_prediction_rev(model, A, B, operator, show=False):
 def evaluate_at_exercise_set(model, exercises_set, print_ans=False):
     mean_acc = 0
     summary_str = ""
-    for A, B, operator in exercises_set:
+    for A, B, operator in tqdm(exercises_set):
         real_ans, model_anss, moder_ansstrs = test_prediction_rev(model, A, B, operator, show=False)
         accuracies = sum([ans == real_ans for ans in model_anss]) / len(model_anss)
         mean_acc += accuracies
@@ -54,9 +57,27 @@ def evaluate_at_exercise_set(model, exercises_set, print_ans=False):
         if print_ans:
             print(sumstr)
     mean_acc /= len(exercises_set)
+    print(f"mean accuracy: {mean_acc:.3f}")
     return mean_acc, summary_str
 
+#%%
+sys.path.append('/home/binxu/Github/Transformer-Toy-Dissection')
+saveroot = r"D:\DL_Projects\Language\ArithmeticGPT"
+saveroot = "/home/binxu/DL_Projects/Language/ArithmeticGPT"
+os.makedirs(saveroot, exist_ok=True)
 
+# config = GPT2Config(n_embd=128, n_layer=12, n_head=8, n_positions=128, n_ctx=128,
+#                     vocab_size=21, bos_token_id=BOS_id, eos_token_id=EOS_id,)
+config = GPT2Config(n_embd=128, n_layer=24, n_head=8, n_positions=128, n_ctx=128,
+                    vocab_size=21, bos_token_id=BOS_id, eos_token_id=EOS_id,)
+# config = GPT2Config(n_embd=128, n_layer=48, n_head=8, n_positions=128, n_ctx=128,
+#                     vocab_size=21, bos_token_id=BOS_id, eos_token_id=EOS_id,)
+model = GPT2LMHeadModel(config)
+model.cuda()
+optimizer = AdamW(model.parameters(), lr=5e-4)  # lr=10e-4)
+expdir = join(saveroot, "run_med_PMM1000_rev_scratch_generalize")
+os.makedirs(join(expdir, "ckpt"), exist_ok=True)
+#%%
 manual_set = [(1, 3, "*"),
               (2, 3, "*"),
               (10, 20, "*"),
@@ -69,27 +90,24 @@ manual_set = [(1, 3, "*"),
               (19, 13, "+"),
               (11, 111, "+"),
               (11, 112, "*"),]
+heldout_mult3_set = set([(random.randint(100, 1000), random.randint(100, 1000), random.choice(["*"])) for _ in range(100)])
+heldout_PM3_set = set([(random.randint(100, 1000), random.randint(100, 1000), random.choice(["+", "-"])) for _ in range(100)])
+heldout_mult2_set = set([(random.randint(10, 100), random.randint(10, 100), random.choice(["*"])) for _ in range(100)])
+heldout_PM2_set = set([(random.randint(10, 100), random.randint(10, 100), random.choice(["+", "-"])) for _ in range(100)])
+heldout_set = heldout_mult3_set | heldout_PM3_set | heldout_mult2_set | heldout_PM2_set
+import pickle
+with open(join(expdir, "heldout_set.pkl"), "wb") as f:
+    pickle.dump({"heldout_mult3_set": heldout_mult3_set,
+                "heldout_PM3_set": heldout_PM3_set,
+                "heldout_mult2_set": heldout_mult2_set,
+                "heldout_PM2_set": heldout_PM2_set, }, f)
 #%%
-sys.path.append('/home/binxu/Github/Transformer-Toy-Dissection')
-saveroot = r"D:\DL_Projects\Language\ArithmeticGPT"
-saveroot = "/home/binxu/DL_Projects/Language/ArithmeticGPT"
-os.makedirs(saveroot, exist_ok=True)
-
-# config = GPT2Config(n_embd=128, n_layer=12, n_head=8, n_positions=128, n_ctx=128,
-#                     vocab_size=21, bos_token_id=BOS_id, eos_token_id=EOS_id,)
-config = GPT2Config(n_embd=128, n_layer=48, n_head=8, n_positions=128, n_ctx=128,
-                    vocab_size=21, bos_token_id=BOS_id, eos_token_id=EOS_id,)
-model = GPT2LMHeadModel(config)
-model.cuda()
-optimizer = AdamW(model.parameters(), lr=5e-4)#lr=10e-4)
-expdir = join(saveroot, "run_xl_PMM1000_rev_scratch")
-os.makedirs(join(expdir, "ckpt"), exist_ok=True)
-#%%
-dataset_PMM_rev = ArithmeticDataset(["+r", "-r", "*r"], (0, 1000), (0, 1000))
+Nbatchs = 200
+dataset_PMM_rev = ArithmeticDataset(["+r", "-r", "*r"], (0, 1000), (0, 1000), heldout_set=heldout_set)
 writer = SummaryWriter(expdir)
 for epoch in range(0, 300):
     model.train()
-    for i in range(200):
+    for i in range(Nbatchs):
         task_fulls, labels = batch_sampler(dataset_PMM_rev, 512)
         out = model(task_fulls.cuda(), labels=labels.cuda())
         loss = out.loss
@@ -97,30 +115,45 @@ for epoch in range(0, 300):
         optimizer.step()
         optimizer.zero_grad()
         print(f"epoch{epoch}-step{i:03d} {loss.item():.5f}")
-        writer.add_scalar("loss", loss.item(), epoch * 100 + i)
-        writer.add_scalar("lr", optimizer.param_groups[0]["lr"], epoch * 100 + i)
-        writer.add_scalar("epoch", epoch, epoch * 100 + i)
+        writer.add_scalar("loss", loss.item(), epoch * Nbatchs + i)
+        writer.add_scalar("lr", optimizer.param_groups[0]["lr"], epoch * Nbatchs + i)
+        writer.add_scalar("epoch", epoch, epoch * Nbatchs + i)
 
     model.eval()
     mean_acc, sumstr = evaluate_at_exercise_set(model, manual_set, print_ans=True)
+    # test on some sample sets
     random_set = [(random.randint(1, 1000), random.randint(1, 1000), random.choice(["+", "-", "*"])) for _ in range(25)]
     mean_acc_rand, sumstr_rand = evaluate_at_exercise_set(model, random_set, print_ans=True)
     random_mult_set = [(random.randint(1, 1000), random.randint(1, 1000), random.choice(["*"])) for _ in range(25)]
     mean_acc_randmult, sumstr_randmult = evaluate_at_exercise_set(model, random_mult_set, print_ans=True)
     random_mult10_set = [(random.randint(1, 10), random.randint(1, 10), random.choice(["*"])) for _ in range(25)]
     mean_acc_randmult10, sumstr_randmult10 = evaluate_at_exercise_set(model, random_mult10_set, print_ans=True)
-    writer.add_scalar("mean_acc_fixset", mean_acc, (epoch + 1) * 100)
-    writer.add_text("fixset_summary", sumstr, (epoch + 1) * 100)
-    writer.add_scalar("mean_acc_randset", mean_acc_rand, (epoch + 1) * 100)
-    writer.add_text("randset_summary", sumstr_rand, (epoch + 1) * 100)
-    writer.add_scalar("mean_acc_randmultset", mean_acc_randmult, (epoch + 1) * 100)
-    writer.add_text("randmultset_summary", sumstr_randmult, (epoch + 1) * 100)
-    writer.add_scalar("mean_acc_randmult10set", mean_acc_randmult10, (epoch + 1) * 100)
-    writer.add_text("randmult10set_summary", sumstr_randmult10, (epoch + 1) * 100)
+    # test on heldout sets
+    mean_acc_heldout_mult2, sumstr_heldout_mult2 = evaluate_at_exercise_set(model, heldout_mult2_set, print_ans=False)
+    mean_acc_heldout_mult3, sumstr_heldout_mult3 = evaluate_at_exercise_set(model, heldout_mult3_set, print_ans=False)
+    mean_acc_heldout_PM2, sumstr_heldout_PM2 = evaluate_at_exercise_set(model, heldout_PM2_set, print_ans=False)
+    mean_acc_heldout_PM3, sumstr_heldout_PM3 = evaluate_at_exercise_set(model, heldout_PM3_set, print_ans=False)
+    writer.add_scalar("mean_acc_fixset", mean_acc, (epoch + 1) * Nbatchs)
+    writer.add_text("fixset_summary", sumstr, (epoch + 1) * Nbatchs)
+    writer.add_scalar("mean_acc_randset", mean_acc_rand, (epoch + 1) * Nbatchs)
+    writer.add_text("randset_summary", sumstr_rand, (epoch + 1) * Nbatchs)
+    writer.add_scalar("mean_acc_randmultset", mean_acc_randmult, (epoch + 1) * Nbatchs)
+    writer.add_text("randmultset_summary", sumstr_randmult, (epoch + 1) * Nbatchs)
+    writer.add_scalar("mean_acc_randmult10set", mean_acc_randmult10, (epoch + 1) * Nbatchs)
+    writer.add_text("randmult10set_summary", sumstr_randmult10, (epoch + 1) * Nbatchs)
+    writer.add_scalar("mean_acc_heldout_mult2", mean_acc_heldout_mult2, (epoch + 1) * Nbatchs)
+    writer.add_text("heldout_mult2_summary", sumstr_heldout_mult2, (epoch + 1) * Nbatchs)
+    writer.add_scalar("mean_acc_heldout_mult3", mean_acc_heldout_mult3, (epoch + 1) * Nbatchs)
+    writer.add_text("heldout_mult3_summary", sumstr_heldout_mult3, (epoch + 1) * Nbatchs)
+    writer.add_scalar("mean_acc_heldout_PM2", mean_acc_heldout_PM2, (epoch + 1) * Nbatchs)
+    writer.add_text("heldout_PM2_summary", sumstr_heldout_PM2, (epoch + 1) * Nbatchs)
+    writer.add_scalar("mean_acc_heldout_PM3", mean_acc_heldout_PM3, (epoch + 1) * Nbatchs)
+    writer.add_text("heldout_PM3_summary", sumstr_heldout_PM3, (epoch + 1) * Nbatchs)
     torch.save(model.state_dict(), join(expdir, "ckpt", f"model_PMM1000_epoch{epoch}.pt"))
 
 
-model.save_pretrained(join(saveroot, "gpt2_xl_arithmetic_PMM_rev_scratch"))
+model.save_pretrained(join(saveroot, "gpt2_med_arithmetic_PMM_rev_scratch_generalize"))
+
 #%% # xl version has 48 layers, and use only 512 batch size while others used 1024 batch size
 #%%
 question = "120 - 51 = "

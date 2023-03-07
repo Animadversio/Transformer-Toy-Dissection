@@ -83,6 +83,17 @@ def mul_task_rev_generator(A, B):
     task_full = f"{A} * {B} = {ansstr[::-1]}; {ans}"
     return task, task_full
 
+
+def mul_task_split_generator(A, B):
+    """Generate a task for multiplication.
+    """
+    ans = A*B
+    ansstr = str(ans)
+    task = f"{A} * {B} = "
+    task_full = f"{A} * {B} = {ansstr[::-1]}; {ans}"
+    return task, task_full
+
+
 task_dict = {
     "+": plus_task_generator,
     "-": minus_task_generator,
@@ -116,19 +127,25 @@ from torch.utils.data import Dataset, DataLoader
 class ArithmeticDataset(Dataset):
     """Generate a dataset for arithmetic tasks.
     """
-    def __init__(self, task_generators, A_range, B_range, max_len=64):
-        self.task_generators = [task_dict[generator] if isinstance(generator, str) else generator for generator in task_generators]
+    def __init__(self, task_generators, A_range, B_range, max_len=64, heldout_set=None):
+        self.task_generators = [task_dict[generator] for generator in task_generators]  # if isinstance(generator, str) else generator
+        self.operator_strs = [generator[0] for generator in task_generators]
         self.A_range = A_range
         self.B_range = B_range
         self.max_len = max_len
+        self.heldout_set = set() if heldout_set is None else heldout_set
 
     def __len__(self):
         return 100000
 
     def __getitem__(self, idx):
-        task_generator = np.random.choice(self.task_generators)
-        A = np.random.randint(*self.A_range)
-        B = np.random.randint(*self.B_range)
+        while True:
+            taski = np.random.randint(len(self.task_generators))
+            task_generator, operator_str = self.task_generators[taski], self.operator_strs[taski]
+            A = np.random.randint(*self.A_range)
+            B = np.random.randint(*self.B_range)
+            if (A, B, operator_str) not in self.heldout_set:
+                break
         task, task_full = generate_task(task_generator, A, B)
         task_full = torch.tensor(task_full)
         task_full_label = task_full.clone()
