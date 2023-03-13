@@ -150,7 +150,7 @@ optimizer = AdamW(miniGPT.parameters(), lr=5e-4)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 miniGPT.train()
 miniGPT.to(device)
-batch_size = 512
+batch_size = 2048
 for epoch in range(5):
     for i in range(100):
         batch = batch_sampler(batch_size=batch_size)
@@ -190,18 +190,22 @@ def GPT_generate_sentence(model, max_len=32):
     sentence = sentence.squeeze().tolist()
     sentence = decode2sentence(sentence)
     return sentence
+
 #%%
 token_embedding = miniGPT.transformer.wte.weight
 position_embedding = miniGPT.transformer.wpe.weight
 #%% visulize the token embedding clusters
-from sklearn.manifold import TSNE
-import matplotlib.pyplot as plt
 import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.manifold import TSNE
 from sklearn.cluster import KMeans
+from scipy.spatial.distance import cosine
+from torchmetrics.functional import pairwise_cosine_similarity
 
-tsne = TSNE(n_components=2, random_state=0)
+tsne = TSNE(n_components=2, random_state=42, perplexity=1000, )
 token_embedding_2d = tsne.fit_transform(token_embedding.detach().numpy())
-kmeans = KMeans(n_clusters=6, random_state=0).fit(token_embedding_2d)
+kmeans = KMeans(n_clusters=6, random_state=42).fit(token_embedding_2d)
 plt.scatter(token_embedding_2d[:, 0], token_embedding_2d[:, 1], c=kmeans.labels_)
 # annotate each word on the plot
 for i, word in enumerate(inverse_dictionary.values()):
@@ -214,3 +218,26 @@ kmeans2 = KMeans(n_clusters=nCluster, random_state=42).fit(token_embedding.detac
 for icluster in range(nCluster):
     cluster_words = [word for word, ind in dictionary.items() if kmeans2.labels_[ind] == icluster]
     print(f"cluster {icluster}: {cluster_words}")
+#%%
+# compute cosine similarity between each pair of words
+# torch.cosine_similarity()
+cos_matrix = pairwise_cosine_similarity(token_embedding, token_embedding, ).detach()
+# sort the words by their cluster labels
+cluster_labels = kmeans2.labels_
+sorted_inds = np.argsort(cluster_labels)
+sorted_cos_matrix = cos_matrix[sorted_inds, :][:, sorted_inds]
+#%%
+plt.figure(figsize=(9, 8))
+sns.heatmap(sorted_cos_matrix, )
+plt.yticks(np.arange(len(sorted_inds)), [inverse_dictionary[ind] for ind in sorted_inds], rotation=0)
+plt.axis("image")
+plt.title("cosine similarity between each pair of words vector")
+plt.show()
+#%%
+# compute svd of the word embedding matrix
+U, S, V = torch.svd(token_embedding.detach())
+# plot the spectrum
+plt.figure()
+plt.plot(S**2)
+plt.title("Spectrum of the word embedding matrix")
+plt.show()
