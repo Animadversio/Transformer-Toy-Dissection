@@ -1,5 +1,10 @@
+"""
+Build an artificial language made from a probabilistic generative grammar
+Then train a transformer on this language.
 
-#%% An artificial language made from a probabilistic generative grammar
+This can be used to demonstrate how pure sequence statistics of grammar can reveal syntax and but maybe not "semantics".
+"""
+import random
 #%% list of words and their parts of speech
 # nouns
 noun_list = ["cat", "dog", "fox", "bird", "horse", "sheep", "cow", "bear", "zebra", "giraffe"]
@@ -33,7 +38,6 @@ rules = {
     "VP": [["IV"], ["TV", "NP"], ["TV", "Conj", "NP", "VP"], ],
 }
 #%%
-import random
 def generate_sentences(rules, word_map, max_depth=3, show=False):
     """ A sentence generator with probabilistic generative grammar. """
     initial_token = "S"
@@ -137,7 +141,6 @@ for i in range(5):
     for j in range(batch.shape[0]):
         print(decode2sentence(batch[j].tolist()))
 #%%
-import torch
 from torch.optim import AdamW
 from transformers import GPT2Model, GPT2Tokenizer, GPT2LMHeadModel, GPT2Config
 #%%
