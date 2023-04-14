@@ -32,7 +32,10 @@ def test_prediction_rev(model, A, B, operator, show=False):
     answer_strs = []
     for answer in answers:
         answer = answer.tolist()
-        answer_str = detokenize_str(answer[1:answer.index(EOS_id)])
+        if not EOS_id in answer:
+            answer_str = detokenize_str(answer[1:])
+        else:
+            answer_str = detokenize_str(answer[1:answer.index(EOS_id)])
         try:
             answer_int = int(answer_str.split(";")[-1])
             answer_ints.append(answer_int)
